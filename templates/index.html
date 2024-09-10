@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Comparison Simulation</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Genome Comparison Simulation</h1>
+    
+    <form id="configForm" enctype="multipart/form-data">
+        <h2>Configuration</h2>
+        <label for="chunk_size">Chunk Size:</label>
+        <input type="number" id="chunk_size" name="chunk_size" value="{{ config.chunk_size }}"><br>
+        
+        <label for="max_differences">Max Differences:</label>
+        <input type="number" id="max_differences" name="max_differences" value="{{ config.max_differences }}"><br>
+        
+        <label for="num_processes">Number of Processes:</label>
+        <input type="number" id="num_processes" name="num_processes" value="{{ config.num_processes }}"><br>
+        
+        <label for="update_interval">Update Interval:</label>
+        <input type="number" id="update_interval" name="update_interval" value="{{ config.update_interval }}"><br>
+        
+        <label for="human_genome_file">Human Genome File:</label>
+        <input type="file" id="human_genome_file" name="human_genome_file" accept=".fa,.fasta">
+        <span id="human_genome_path">{{ config.human_genome_path }}</span><br>
+        
+        <label for="genome1_file">Genome 1 File:</label>
+        <input type="file" id="genome1_file" name="genome1_file" accept=".fa,.fasta">
+        <span id="genome1_path">{{ config.genome1_path }}</span><br>
+        
+        <label for="genome2_file">Genome 2 File:</label>
+        <input type="file" id="genome2_file" name="genome2_file" accept=".fa,.fasta">
+        <span id="genome2_path">{{ config.genome2_path }}</span><br>
+        
+        <label for="genome1_name">Genome 1 Name:</label>
+        <input type="text" id="genome1_name" name="genome1_name" value="{{ config.genome1_name }}"><br>
+        
+        <label for="genome2_name">Genome 2 Name:</label>
+        <input type="text" id="genome2_name" name="genome2_name" value="{{ config.genome2_name }}"><br>
+        
+        <button type="submit">Update Configuration</button>
+    </form>
+
+    <button id="startButton">Start Simulation</button>
+    <button id="killButton">Kill Application</button>
+    <div id="plot"></div>
+    <div id="percentagePlot"></div>
+
+    <script>
+        const socket = io();
+        const startButton = document.getElementById('startButton');
+        const killButton = document.getElementById('killButton');
+        const plotDiv = document.getElementById('plot');
+        const percentagePlotDiv = document.getElementById('percentagePlot');
+        const configForm = document.getElementById('configForm');
+
+        let data = [
+            {x: [], y: [], name: 'Human only', type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'lines'}
+        ];
+
+        let percentageData = [
+            {x: [], y: [], name: 'Human only', type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,0,0,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(0,255,0,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(0,0,255,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,255,0,0.5)'}
+        ];
+
+        let layout = {
+            title: 'Genome Comparison Results (Counts)',
+            xaxis: {title: 'Total Comparisons'},
+            yaxis: {title: 'Count'}
+        };
+
+        let percentageLayout = {
+            title: 'Genome Comparison Results (Percentages)',
+            xaxis: {title: 'Total Comparisons'},
+            yaxis: {title: 'Percentage', range: [0, 100]},
+            barmode: 'stack'
+        };
+
+        Plotly.newPlot(plotDiv, data, layout);
+        Plotly.newPlot(percentagePlotDiv, percentageData, percentageLayout);
+
+        configForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(configForm);
+            fetch('/configure', {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (response.ok) {
+                    alert('Configuration updated successfully');
+                    location.reload();  // Reload the page to reflect new configuration
+                } else {
+                    alert('Failed to update configuration');
+                }
+            });
+        });
+
+        startButton.addEventListener('click', () => {
+            socket.emit('start_simulation');
+            startButton.disabled = true;
+        });
+
+        killButton.addEventListener('click', () => {
+            if (confirm('Are you sure you want to kill the application?')) {
+                socket.emit('kill_application');
+            }
+        });
+
+        socket.on('update', (updateData) => {
+            const state = updateData.state;
+            const total = updateData.total;
+
+            let sum = Object.values(state).reduce((a, b) => a + b, 0);
+            console.log(sum);
+            console.log(state);
+
+            for (let i = 0; i < data.length; i++) {
+                data[i].x.push(total);
+                data[i].y.push(state[data[i].name]);
+            }
+
+            for (let i = 0; i < percentageData.length; i++) {
+                let percentage = (state[percentageData[i].name] / sum) * 100;
+                percentageData[i].x.push(total);
+                percentageData[i].y.push(percentage);
+            }
+            console.log(percentageData);
+
+            Plotly.update(plotDiv, {
+                x: data.map(trace => trace.x),
+                y: data.map(trace => trace.y)
+            }, layout);
+
+            Plotly.update(percentagePlotDiv, {
+                x: percentageData.map(trace => trace.x),
+                y: percentageData.map(trace => trace.y)
+            }, percentageLayout);
+
+            console.log('State updated:', state);
+        });
+
+        socket.on('application_killed', () => {
+            alert('Application has been killed. Please refresh the page to restart.');
+            startButton.disabled = false;
+        });
+
+        document.getElementById('configForm').onsubmit = function(e) {
+            e.preventDefault();
+            
+            var formData = new FormData(this);
+            
+            fetch('/configure', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);  // Show success message
+                // Update the displayed file paths
+                document.getElementById('human_genome_path').textContent = data.config.human_genome_path;
+                document.getElementById('genome1_path').textContent = data.config.genome1_path;
+                document.getElementById('genome2_path').textContent = data.config.genome2_path;
+                // Update other form fields if needed
+                document.getElementById('genome1_name').value = data.config.genome1_name;
+                document.getElementById('genome2_name').value = data.config.genome2_name;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while updating the configuration.');
+            });
+        };
+    </script>
+</body>
+</html>

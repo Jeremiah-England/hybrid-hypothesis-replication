@@ -1,0 +1,19 @@
+[project]
+name = "hybrid-hypothesis-replication"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests",
+    "tqdm",
+    "polars>=1.6.0",
+    "levenshtein>=0.25.1",
+    "flask>=3.0.3",
+    "plotly>=5.24.0",
+    "flask-socketio>=5.3.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

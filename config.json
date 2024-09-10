@@ -1,1 +1,0 @@
-{"chunk_size": 40, "max_differences": 5, "num_processes": 3, "update_interval": 10, "human_genome_path": "uploads/human_hg38.fa", "genome1_path": "uploads/pig_sscrofa11.1.fa", "genome2_path": "uploads/bonobo_contigs.fa", "genome1_name": "pig", "genome2_name": "bonobo"}

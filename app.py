@@ -14,7 +14,7 @@ from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
 from werkzeug.utils import secure_filename
 
-from genome_comparison import compare_chunk, read_genome
+from genome_comparison import compare_chunk, read_and_encode_genome
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -59,29 +59,29 @@ class Simulation:
         self.genome2: str = ""
 
     def load_genomes(self) -> None:
-        self.human_genome = read_genome(self.config.human_genome_path)
-        self.genome1 = read_genome(self.config.genome1_path)
-        self.genome2 = read_genome(self.config.genome2_path)
-
-    def run_comparison(self) -> tuple[bool, bool]:
-        print("Running comparison")
-        import time
-
-        time.sleep(0.01)
-
-        import random
-
-        return random.choice([True, False]), random.choice([True, False])
+        self.human_genome = read_and_encode_genome(self.config.human_genome_path)
+        self.genome1 = read_and_encode_genome(self.config.genome1_path)
+        self.genome2 = read_and_encode_genome(self.config.genome2_path)
 
     # def run_comparison(self) -> tuple[bool, bool]:
     #     print("Running comparison")
-    #     chunk_start = random.randint(0, len(self.human_genome) - self.config.chunk_size)
-    #     chunk = self.human_genome[chunk_start : chunk_start + self.config.chunk_size]
+    #     import time
 
-    #     genome1_match = compare_chunk(chunk, self.genome1, self.config.max_differences)
-    #     genome2_match = compare_chunk(chunk, self.genome2, self.config.max_differences)
+    #     time.sleep(0.01)
 
-    #     return genome1_match, genome2_match
+    #     import random
+
+    #     return random.choice([True, False]), random.choice([True, False])
+
+    def run_comparison(self) -> tuple[bool, bool]:
+        print("Running comparison")
+        chunk_start = random.randint(0, len(self.human_genome) - self.config.chunk_size)
+        chunk = self.human_genome[chunk_start : chunk_start + self.config.chunk_size]
+
+        genome1_match = compare_chunk(chunk, self.genome1, self.config.max_differences)
+        genome2_match = compare_chunk(chunk, self.genome2, self.config.max_differences)
+
+        return genome1_match, genome2_match
 
     def update_state(self, genome1_match: bool, genome2_match: bool) -> None:
         if genome1_match and genome2_match:
@@ -99,7 +99,7 @@ class Simulation:
 
     def run_simulation(self, callback: Callable[[SimulationState], Any]) -> None:
         print("Starting simulation")
-        # self.load_genomes()  # Load genomes before starting the simulation
+        self.load_genomes()
         print("Genomes loaded")
         from concurrent.futures import ProcessPoolExecutor, as_completed
 

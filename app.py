@@ -4,11 +4,14 @@ import os
 import random
 import signal
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from itertools import repeat
+from multiprocessing import shared_memory
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import plotly.graph_objects as go
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
@@ -54,32 +57,57 @@ class Simulation:
     def __init__(self, config: SimulationConfig):
         self.config = config
         self.state = SimulationState()
-        self.human_genome: str = ""
-        self.genome1: str = ""
-        self.genome2: str = ""
+        self.human_genome_shm: shared_memory.SharedMemory | None = None
+        self.genome1_shm: shared_memory.SharedMemory | None = None
+        self.genome2_shm: shared_memory.SharedMemory | None = None
+        self.human_genome_size: int = 0
+        self.genome1_size: int = 0
+        self.genome2_size: int = 0
 
     def load_genomes(self) -> None:
-        self.human_genome = read_and_encode_genome(self.config.human_genome_path)
-        self.genome1 = read_and_encode_genome(self.config.genome1_path)
-        self.genome2 = read_and_encode_genome(self.config.genome2_path)
+        try:
+            print("Loading genomes")
+            print(f"Human genome path: {self.config.human_genome_path}")
+            human_genome = read_and_encode_genome(self.config.human_genome_path)
+            print("Human genome loaded")
+            print(f"Genome1 path: {self.config.genome1_path}")
+            genome1 = read_and_encode_genome(self.config.genome1_path)
+            print("Genome1 loaded")
+            print(f"Genome2 path: {self.config.genome2_path}")
+            genome2 = read_and_encode_genome(self.config.genome2_path)
+            print("Genome2 loaded")
 
-    # def run_comparison(self) -> tuple[bool, bool]:
-    #     print("Running comparison")
-    #     import time
+            self.human_genome_size = len(human_genome)
+            self.genome1_size = len(genome1)
+            self.genome2_size = len(genome2)
 
-    #     time.sleep(0.01)
+            self.human_genome_shm = shared_memory.SharedMemory(create=True, size=self.human_genome_size)
+            self.genome1_shm = shared_memory.SharedMemory(create=True, size=self.genome1_size)
+            self.genome2_shm = shared_memory.SharedMemory(create=True, size=self.genome2_size)
 
-    #     import random
-
-    #     return random.choice([True, False]), random.choice([True, False])
+            self.human_genome_shm.buf[:] = human_genome.tobytes()
+            self.genome1_shm.buf[:] = genome1.tobytes()
+            self.genome2_shm.buf[:] = genome2.tobytes()
+        except Exception as e:
+            print(f"Error loading genomes: {e}")
+            raise e
 
     def run_comparison(self) -> tuple[bool, bool]:
-        print("Running comparison")
-        chunk_start = random.randint(0, len(self.human_genome) - self.config.chunk_size)
-        chunk = self.human_genome[chunk_start : chunk_start + self.config.chunk_size]
+        # human_genome_shm = shared_memory.SharedMemory(name=human_genome_name)
+        # genome1_shm = shared_memory.SharedMemory(name=genome1_name)
+        # genome2_shm = shared_memory.SharedMemory(name=genome2_name)
 
-        genome1_match = compare_chunk(chunk, self.genome1, self.config.max_differences)
-        genome2_match = compare_chunk(chunk, self.genome2, self.config.max_differences)
+        human_genome = np.frombuffer(self.human_genome_shm.buf[: self.human_genome_size], dtype=np.int8)
+        genome1 = np.frombuffer(self.genome1_shm.buf[: self.genome1_size], dtype=np.int8)
+        genome2 = np.frombuffer(self.genome2_shm.buf[: self.genome2_size], dtype=np.int8)
+
+        chunk_start = random.randint(0, len(human_genome) - self.config.chunk_size)
+        chunk = human_genome[chunk_start : chunk_start + self.config.chunk_size]
+
+        genome1_match = compare_chunk(chunk, genome1, self.config.max_differences)
+        genome2_match = compare_chunk(chunk, genome2, self.config.max_differences)
+
+        print(f"Chunk: {chunk}, Genome1 match: {genome1_match}, Genome2 match: {genome2_match}")
 
         return genome1_match, genome2_match
 
@@ -101,7 +129,6 @@ class Simulation:
         print("Starting simulation")
         self.load_genomes()
         print("Genomes loaded")
-        from concurrent.futures import ProcessPoolExecutor, as_completed
 
         with ProcessPoolExecutor(max_workers=self.config.num_processes) as executor:
             for future in as_completed(executor.submit(self.run_comparison) for _ in range(10_000)):
@@ -112,6 +139,14 @@ class Simulation:
                 if self.state.total_comparisons % self.config.update_interval == 0:
                     print("Calling callback")
                     callback(self.state)
+
+        # Clean up shared memory
+        self.human_genome_shm.close()
+        self.genome1_shm.close()
+        self.genome2_shm.close()
+        self.human_genome_shm.unlink()
+        self.genome1_shm.unlink()
+        self.genome2_shm.unlink()
 
 
 # Add this function to load the configuration from a file

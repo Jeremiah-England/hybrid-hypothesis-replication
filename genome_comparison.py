@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 from numba import njit
 
 # Constants for 2-bit encoding
@@ -20,7 +21,7 @@ def encode_base(base: int) -> int:
     return -1  # For 'N' or any other character
 
 
-def read_and_encode_genome(file_path: str) -> np.ndarray:
+def read_and_encode_genome(file_path: str) -> npt.NDArray[np.int8]:
     """Read a genome from a FASTA file and encode it as a 2-bit representation."""
     with Path(file_path).open("rb") as f:
         genome = b"".join(line.strip() for line in f if not line.startswith(b">"))
@@ -30,7 +31,7 @@ def read_and_encode_genome(file_path: str) -> np.ndarray:
 
 
 @njit(nogil=True, nopython=True)
-def _encode_genome(genome: np.ndarray) -> np.ndarray:
+def _encode_genome(genome: npt.NDArray[np.int8]) -> npt.NDArray[np.int8]:
     encoded = np.empty(genome.shape, dtype=np.int8)
     for i in range(len(genome)):
         encoded[i] = encode_base(genome[i])
@@ -38,7 +39,7 @@ def _encode_genome(genome: np.ndarray) -> np.ndarray:
 
 
 @njit(nogil=True, nopython=True)
-def compare_chunk(chunk: np.ndarray, target_genome: np.ndarray, max_differences: int) -> bool:
+def compare_chunk(chunk: npt.NDArray[np.int8], target_genome: npt.NDArray[np.int8], max_differences: int) -> bool:
     """Check if the chunk matches anywhere in the target genome using bitwise XOR."""
     chunk_size = len(chunk)
     for i in range(len(target_genome) - chunk_size + 1):
@@ -50,7 +51,7 @@ def compare_chunk(chunk: np.ndarray, target_genome: np.ndarray, max_differences:
 
 @njit(nogil=True, nopython=True)
 def find_matches(
-    query_genome: np.ndarray, target_genome: np.ndarray, chunk_size: int, max_differences: int
+    query_genome: npt.NDArray[np.int8], target_genome: npt.NDArray[np.int8], chunk_size: int, max_differences: int
 ) -> tuple[int, int]:
     """Find matching chunks between query and target genomes."""
     total_chunks = len(query_genome) - chunk_size + 1

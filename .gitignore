@@ -2,3 +2,5 @@ __pycache__/
 genomes/
 config.json
 uploads/
+.venv/
+.pytest_cache/

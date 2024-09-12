@@ -43,4 +43,7 @@ wget "https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/latest/hg38.fa.gz"
 # Download Pig genome
 wget "https://ftp.ensembl.org/pub/release-112/fasta/sus_scrofa/dna/Sus_scrofa.Sscrofa11.1.dna.toplevel.fa.gz" --output-document="genomes/pig_sscrofa11.1.fa.gz"
 
+# Download the cow genome
+wget "https://hgdownload.soe.ucsc.edu/goldenPath/bosTau9/bigZips/bosTau9.fa.gz" --output-document="genomes/cow_bosTau9.fa.gz"
+
 echo "All downloads completed"

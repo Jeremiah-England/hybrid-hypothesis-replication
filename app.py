@@ -28,16 +28,30 @@ class SimulationState:
     human_only: int = 0
     human_genome1: int = 0
     human_genome2: int = 0
+    human_genome3: int = 0
     human_genome1_genome2: int = 0
+    human_genome1_genome3: int = 0
+    human_genome2_genome3: int = 0
+    human_genome1_genome2_genome3: int = 0
     total_comparisons: int = 0
 
     def to_dict(self) -> dict[str, int]:
-        return {
+        result = {
             "Human only": self.human_only,
             f"Human-{simulation.config.genome1_name}": self.human_genome1,
             f"Human-{simulation.config.genome2_name}": self.human_genome2,
             f"Human-{simulation.config.genome1_name}-{simulation.config.genome2_name}": self.human_genome1_genome2,
         }
+        if simulation.config.genome3_path:
+            result.update(
+                {
+                    f"Human-{simulation.config.genome3_name}": self.human_genome3,
+                    f"Human-{simulation.config.genome1_name}-{simulation.config.genome3_name}": self.human_genome1_genome3,
+                    f"Human-{simulation.config.genome2_name}-{simulation.config.genome3_name}": self.human_genome2_genome3,
+                    f"Human-{simulation.config.genome1_name}-{simulation.config.genome2_name}-{simulation.config.genome3_name}": self.human_genome1_genome2_genome3,
+                }
+            )
+        return result
 
 
 @dataclass(frozen=True)
@@ -49,8 +63,10 @@ class SimulationConfig:
     human_genome_path: str = ""
     genome1_path: str = ""
     genome2_path: str = ""
+    genome3_path: str = ""
     genome1_name: str = "Genome1"
     genome2_name: str = "Genome2"
+    genome3_name: str = "Genome3"
 
 
 class Simulation:
@@ -60,9 +76,11 @@ class Simulation:
         self.human_genome_shm: shared_memory.SharedMemory | None = None
         self.genome1_shm: shared_memory.SharedMemory | None = None
         self.genome2_shm: shared_memory.SharedMemory | None = None
+        self.genome3_shm: shared_memory.SharedMemory | None = None
         self.human_genome_size: int = 0
         self.genome1_size: int = 0
         self.genome2_size: int = 0
+        self.genome3_size: int = 0
 
     def load_genomes(self) -> None:
         try:
@@ -88,11 +106,19 @@ class Simulation:
             self.human_genome_shm.buf[:] = human_genome.tobytes()
             self.genome1_shm.buf[:] = genome1.tobytes()
             self.genome2_shm.buf[:] = genome2.tobytes()
+
+            if self.config.genome3_path:
+                print(f"Genome3 path: {self.config.genome3_path}")
+                genome3 = read_and_encode_genome(self.config.genome3_path)
+                print("Genome3 loaded")
+                self.genome3_size = len(genome3)
+                self.genome3_shm = shared_memory.SharedMemory(create=True, size=self.genome3_size)
+                self.genome3_shm.buf[:] = genome3.tobytes()
         except Exception as e:
             print(f"Error loading genomes: {e}")
             raise e
 
-    def run_comparison(self) -> tuple[bool, bool]:
+    def run_comparison(self) -> tuple[bool, bool, bool]:
         # human_genome_shm = shared_memory.SharedMemory(name=human_genome_name)
         # genome1_shm = shared_memory.SharedMemory(name=genome1_name)
         # genome2_shm = shared_memory.SharedMemory(name=genome2_name)
@@ -107,23 +133,48 @@ class Simulation:
         genome1_match = compare_chunk(chunk, genome1, self.config.max_differences)
         genome2_match = compare_chunk(chunk, genome2, self.config.max_differences)
 
-        print(f"Chunk: {chunk}, Genome1 match: {genome1_match}, Genome2 match: {genome2_match}")
+        genome3_match = False
+        if self.config.genome3_path:
+            genome3 = np.frombuffer(self.genome3_shm.buf[: self.genome3_size], dtype=np.int8)
+            genome3_match = compare_chunk(chunk, genome3, self.config.max_differences)
 
-        return genome1_match, genome2_match
+        print(
+            f"Chunk: {chunk}, Genome1 match: {genome1_match}, Genome2 match: {genome2_match}, Genome3 match: {genome3_match}"
+        )
 
-    def update_state(self, genome1_match: bool, genome2_match: bool) -> None:
-        if genome1_match and genome2_match:
-            self.state = SimulationState(
-                **{**self.state.__dict__, "human_genome1_genome2": self.state.human_genome1_genome2 + 1}
-            )
-        elif genome1_match:
-            self.state = SimulationState(**{**self.state.__dict__, "human_genome1": self.state.human_genome1 + 1})
-        elif genome2_match:
-            self.state = SimulationState(**{**self.state.__dict__, "human_genome2": self.state.human_genome2 + 1})
+        return genome1_match, genome2_match, genome3_match
+
+    def update_state(self, genome1_match: bool, genome2_match: bool, genome3_match: bool) -> None:
+        new_state = {}
+        if self.config.genome3_path:
+            if genome1_match and genome2_match and genome3_match:
+                new_state["human_genome1_genome2_genome3"] = self.state.human_genome1_genome2_genome3 + 1
+            elif genome1_match and genome2_match:
+                new_state["human_genome1_genome2"] = self.state.human_genome1_genome2 + 1
+            elif genome1_match and genome3_match:
+                new_state["human_genome1_genome3"] = self.state.human_genome1_genome3 + 1
+            elif genome2_match and genome3_match:
+                new_state["human_genome2_genome3"] = self.state.human_genome2_genome3 + 1
+            elif genome1_match:
+                new_state["human_genome1"] = self.state.human_genome1 + 1
+            elif genome2_match:
+                new_state["human_genome2"] = self.state.human_genome2 + 1
+            elif genome3_match:
+                new_state["human_genome3"] = self.state.human_genome3 + 1
+            else:
+                new_state["human_only"] = self.state.human_only + 1
         else:
-            self.state = SimulationState(**{**self.state.__dict__, "human_only": self.state.human_only + 1})
+            if genome1_match and genome2_match:
+                new_state["human_genome1_genome2"] = self.state.human_genome1_genome2 + 1
+            elif genome1_match:
+                new_state["human_genome1"] = self.state.human_genome1 + 1
+            elif genome2_match:
+                new_state["human_genome2"] = self.state.human_genome2 + 1
+            else:
+                new_state["human_only"] = self.state.human_only + 1
 
-        self.state = SimulationState(**{**self.state.__dict__, "total_comparisons": self.state.total_comparisons + 1})
+        new_state["total_comparisons"] = self.state.total_comparisons + 1
+        self.state = SimulationState(**{**self.state.__dict__, **new_state})
 
     def run_simulation(self, callback: Callable[[SimulationState], Any]) -> None:
         print("Starting simulation")
@@ -132,9 +183,9 @@ class Simulation:
 
         with ProcessPoolExecutor(max_workers=self.config.num_processes) as executor:
             for future in as_completed(executor.submit(self.run_comparison) for _ in range(10_000)):
-                genome1_match, genome2_match = future.result()
+                genome1_match, genome2_match, genome3_match = future.result()
                 print("Updating state")
-                self.update_state(genome1_match, genome2_match)
+                self.update_state(genome1_match, genome2_match, genome3_match)
                 print("State updated")
                 if self.state.total_comparisons % self.config.update_interval == 0:
                     print("Calling callback")
@@ -147,6 +198,9 @@ class Simulation:
         self.human_genome_shm.unlink()
         self.genome1_shm.unlink()
         self.genome2_shm.unlink()
+        if self.genome3_shm:
+            self.genome3_shm.close()
+            self.genome3_shm.unlink()
 
 
 # Add this function to load the configuration from a file
@@ -198,8 +252,10 @@ def configure() -> str:
         human_genome_path=save_uploaded_file("human_genome_file"),
         genome1_path=save_uploaded_file("genome1_file"),
         genome2_path=save_uploaded_file("genome2_file"),
+        genome3_path=save_uploaded_file("genome3_file"),
         genome1_name=request.form["genome1_name"],
         genome2_name=request.form["genome2_name"],
+        genome3_name=request.form["genome3_name"],
     )
     simulation = Simulation(config)
     save_config(config)  # Save the new configuration

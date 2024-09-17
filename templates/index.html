@@ -36,11 +36,18 @@
         <input type="file" id="genome2_file" name="genome2_file" accept=".fa,.fasta">
         <span id="genome2_path">{{ config.genome2_path }}</span><br>
         
+        <label for="genome3_file">Genome 3 File (Optional):</label>
+        <input type="file" id="genome3_file" name="genome3_file" accept=".fa,.fasta">
+        <span id="genome3_path">{{ config.genome3_path }}</span><br>
+        
         <label for="genome1_name">Genome 1 Name:</label>
         <input type="text" id="genome1_name" name="genome1_name" value="{{ config.genome1_name }}"><br>
         
         <label for="genome2_name">Genome 2 Name:</label>
         <input type="text" id="genome2_name" name="genome2_name" value="{{ config.genome2_name }}"><br>
+        
+        <label for="genome3_name">Genome 3 Name:</label>
+        <input type="text" id="genome3_name" name="genome3_name" value="{{ config.genome3_name }}"><br>
         
         <button type="submit">Update Configuration</button>
     </form>
@@ -62,14 +69,22 @@
             {x: [], y: [], name: 'Human only', type: 'scatter', mode: 'lines'},
             {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}`, type: 'scatter', mode: 'lines'},
             {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'lines'},
-            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'lines'}
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'lines'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'lines'}
         ];
 
         let percentageData = [
             {x: [], y: [], name: 'Human only', type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,0,0,0.5)'},
             {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(0,255,0,0.5)'},
             {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(0,0,255,0.5)'},
-            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,255,0,0.5)'}
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,255,0,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,0,255,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(0,255,255,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome2_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(255,165,0,0.5)'},
+            {x: [], y: [], name: `Human-${document.getElementById('genome1_name').value}-${document.getElementById('genome2_name').value}-${document.getElementById('genome3_name').value}`, type: 'scatter', mode: 'none', stackgroup: 'one', fillcolor: 'rgba(128,0,128,0.5)'}
         ];
 
         let layout = {
@@ -123,17 +138,21 @@
             console.log(sum);
             console.log(state);
 
-            for (let i = 0; i < data.length; i++) {
+            for (let i = 0; i < Object.keys(state).length; i++) {
+                if (i >= data.length) {
+                    // Add new trace if it doesn't exist (for the case of 3 genomes)
+                    let newTrace = {x: [], y: [], name: Object.keys(state)[i], type: 'scatter', mode: 'lines'};
+                    data.push(newTrace);
+                    let newPercentageTrace = {...newTrace, mode: 'none', stackgroup: 'one', fillcolor: getRandomColor()};
+                    percentageData.push(newPercentageTrace);
+                }
                 data[i].x.push(total);
-                data[i].y.push(state[data[i].name]);
-            }
+                data[i].y.push(state[Object.keys(state)[i]]);
 
-            for (let i = 0; i < percentageData.length; i++) {
-                let percentage = (state[percentageData[i].name] / sum) * 100;
+                let percentage = (state[Object.keys(state)[i]] / sum) * 100;
                 percentageData[i].x.push(total);
                 percentageData[i].y.push(percentage);
             }
-            console.log(percentageData);
 
             Plotly.update(plotDiv, {
                 x: data.map(trace => trace.x),
@@ -169,15 +188,21 @@
                 document.getElementById('human_genome_path').textContent = data.config.human_genome_path;
                 document.getElementById('genome1_path').textContent = data.config.genome1_path;
                 document.getElementById('genome2_path').textContent = data.config.genome2_path;
+                document.getElementById('genome3_path').textContent = data.config.genome3_path;
                 // Update other form fields if needed
                 document.getElementById('genome1_name').value = data.config.genome1_name;
                 document.getElementById('genome2_name').value = data.config.genome2_name;
+                document.getElementById('genome3_name').value = data.config.genome3_name;
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while updating the configuration.');
             });
         };
+
+        function getRandomColor() {
+            return `rgba(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*256)},${Math.floor(Math.random()*256)},0.5)`;
+        }
     </script>
 </body>
 </html>

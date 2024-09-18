@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genome Comparison Simulation</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; }
+        label { display: block; margin-top: 10px; }
+        input, button { margin-top: 5px; }
+        #status, #results { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Genome Comparison Simulation</h1>
+    
+    <div id="configuration">
+        <h2>Configuration</h2>
+        <label for="chunk_size">Chunk Size:</label>
+        <input type="number" id="chunk_size" value="40">
+        
+        <label for="max_differences">Max Differences:</label>
+        <input type="number" id="max_differences" value="5">
+        
+        <label for="num_processes">Number of Processes:</label>
+        <input type="number" id="num_processes" value="4">
+        
+        <label for="update_interval">Update Interval:</label>
+        <input type="number" id="update_interval" value="100">
+        
+        <button onclick="updateConfig()">Update Configuration</button>
+    </div>
+
+    <div id="control">
+        <h2>Control</h2>
+        <button onclick="startSimulation()">Start Simulation</button>
+        <button onclick="stopSimulation()">Stop Simulation</button>
+    </div>
+
+    <div id="status">
+        <h2>Status</h2>
+        <p id="statusMessage">Idle</p>
+    </div>
+
+    <div id="results">
+        <h2>Results</h2>
+        <pre id="resultData"></pre>
+    </div>
+
+    <script>
+        let ws = null;
+
+        function updateConfig() {
+            const config = {
+                chunk_size: parseInt(document.getElementById('chunk_size').value),
+                max_differences: parseInt(document.getElementById('max_differences').value),
+                num_processes: parseInt(document.getElementById('num_processes').value),
+                update_interval: parseInt(document.getElementById('update_interval').value)
+            };
+
+            fetch('/api/configure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('statusMessage').textContent = data.message;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('statusMessage').textContent = 'Error updating configuration';
+            });
+        }
+
+        function startSimulation() {
+            if (ws) {
+                ws.close();
+            }
+
+            ws = new WebSocket('ws://' + window.location.host + '/ws');
+            
+            ws.onopen = function() {
+                document.getElementById('statusMessage').textContent = 'Connected to WebSocket';
+                ws.send('start_simulation');
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === "simulation_results") {
+                    const state = data.state;
+                    document.getElementById('resultData').textContent = JSON.stringify(state, null, 2);
+                }
+            };
+
+            ws.onclose = function() {
+                document.getElementById('statusMessage').textContent = 'WebSocket connection closed';
+            };
+        }
+
+        function stopSimulation() {
+            if (ws) {
+                ws.close();
+            }
+            document.getElementById('statusMessage').textContent = 'Simulation stopped';
+        }
+    </script>
+</body>
+</html>

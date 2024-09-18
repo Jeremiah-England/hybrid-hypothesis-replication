@@ -4,3 +4,5 @@ config.json
 uploads/
 .venv/
 .pytest_cache/
+rust/target/
+rust/cache/
